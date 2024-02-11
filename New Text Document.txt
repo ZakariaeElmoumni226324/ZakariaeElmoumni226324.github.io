@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generative AI</title>
+    <style>
+        /* Add your CSS styles here */
+        /* You can customize the appearance of your page */
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Generative AI</h1>
+    </header>
+
+    <!-- Add a section for project description -->
+    <section id="description">
+        <h2>Description</h2>
+        <p>This project adresses fine tuning a stable diffusion model using out own dataset..</p>
+    </section>
+
+    <!-- Add a section for showcasing code -->
+    <section id="code">
+        <h2>    //We first need to have Python installed and have access to a good GPU (15GB+ VRAM recommended).
+    //Then we need to create an account on Facehugger and create a write token for us to use up ahead.
+    //Create the dataset and import it to a folder named images.
+    //Now we can start.
+    
+    //We need to install autotrain advanced:
+    !pip install -U -q autotrain-advanced
+    
+    //After that's done, we have to configure the project config file.
+    //Here, we can set the Facehugger token, project name as well as specify the model we are going to use, in our case: stable-diffusion-xl-base-1.0.
+    
+    import os
+    
+    //@markdown ---
+    //@markdown #### Project Config
+    project_name = 'Gen-AI-Challenge-Info' # @param {type:"string"}
+    model_name = 'stabilityai/stable-diffusion-xl-base-1.0' # @param ["stabilityai/stable-diffusion-xl-base-1.0", "runwayml/stable-diffusion-v1-5", "stabilityai/stable-diffusion-2-1", "stabilityai/stable-diffusion-2-1-base"]
+    prompt = 'ice plant, PVZ' # @param {type: "string"}
+    
+    //@markdown ---
+    //@markdown #### Push to Hub?
+    //@markdown Use these only if you want to push your trained model to a private repo in your Hugging Face Account.
+    //@markdown If you don't use these, the model will be saved in Google Colab and you are required to download it manually.
+    //@markdown Please enter your Hugging Face write token. The trained model will be saved to your Hugging Face account.
+    //@markdown You can find your token here: https://huggingface.co/settings/tokens
+    push_to_hub = True # @param ["False", "True"] {type:"raw"}
+    hf_token = "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" #@param {type:"string"}
+    repo_id = "calypso604/Gen-AI-Challenge-Info" #@param {type:"string"}
+    
+    //@markdown ---
+    //@markdown #### Hyperparameters
+    learning_rate = 1e-4 # @param {type:"number"}
+    num_steps = 250 #@param {type:"number"}  
+    batch_size = 1 # @param {type:"slider", min:1, max:32, step:1}  
+    gradient_accumulation = 2 # @param {type:"slider", min:1, max:32, step:1}  
+    resolution = 512 # @param {type:"slider", min:128, max:1024, step:128}  
+    use_8bit_adam = False # @param ["False", "True"] {type:"raw"}
+    use_xformers = False # @param ["False", "True"] {type:"raw"}
+    use_fp16 = True # @param ["False", "True"] {type:"raw"}
+    train_text_encoder = False # @param ["False", "True"] {type:"raw"}
+    gradient_checkpointing = True # @param ["False", "True"] {type:"raw"}
+    
+    os.environ["PROJECT_NAME"] = project_name
+    os.environ["MODEL_NAME"] = model_name
+    os.environ["PROMPT"] = prompt
+    os.environ["PUSH_TO_HUB"] = str(push_to_hub)
+    os.environ["HF_TOKEN"] = hf_token
+    os.environ["REPO_ID"] = repo_id
+    os.environ["LEARNING_RATE"] = str(learning_rate)
+    os.environ["NUM_STEPS"] = str(num_steps)
+    os.environ["BATCH_SIZE"] = str(batch_size)
+    os.environ["GRADIENT_ACCUMULATION"] = str(gradient_accumulation)
+    os.environ["RESOLUTION"] = str(resolution)
+    os.environ["USE_8BIT_ADAM"] = str(use_8bit_adam)
+    os.environ["USE_XFORMERS"] = str(use_xformers)
+    os.environ["USE_FP16"] = str(use_fp16)
+    os.environ["TRAIN_TEXT_ENCODER"] = str(train_text_encoder)
+    os.environ["GRADIENT_CHECKPOINTING"] = str(gradient_checkpointing)
+    
+    //After that, we have to configure the parameters relating to the batch size, resolution, etc., then start the autotrainer:
+    
+    !autotrain dreambooth \
+    --model ${MODEL_NAME} \
+    --project-name ${PROJECT_NAME} \
+    --image-path images/ \
+    --prompt "${PROMPT}" \
+    --resolution ${RESOLUTION} \
+    --batch-size ${BATCH_SIZE} \
+    --num-steps ${NUM_STEPS} \
+    --lr ${LEARNING_RATE} \
+    $( [[ "$USE_FP16" == "True" ]] && echo "--fp16" ) \
+    $( [[ "$USE_XFORMERS" == "True" ]] && echo "--xformers" ) \
+    $( [[ "$TRAIN_TEXT_ENCODER" == "True" ]] && echo "--train-text-encoder" ) \
+    $( [[ "$USE_8BIT_ADAM" == "True" ]] && echo "--use-8bit-adam" ) \
+    $( [[ "$PUSH_TO_HUB" == "True" ]] && echo "--push-to-hub --token ${HF_TOKEN} --repo-id ${REPO_ID}" )
+    
+    //In my case, I had to delete the --gradient-accumulation as the main program didn't see it as a possible argument, but this may vary on your hardware/software and installation.
+    //Finally, we can run the inference code, that lets us compile everything.
+    
+    from diffusers import DiffusionPipeline
+    import torch
+    from diffusers import DiffusionPipeline, AutoencoderKL
+    vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix", torch_dtype=torch.float16)
+    pipe = DiffusionPipeline.from_pretrained(
+        "stabilityai/stable-diffusion-xl-base-1.0",
+        vae=vae,
+        torch_dtype=torch.float16,
+        variant="fp16",
+        use_safetensors=True
+    )
+    pipe.load_lora_weights("dhanushreddy29/sdxl-dreambooth-shirts")
+    pipe.to("cuda")
+    
+    //In the final step, we can run a prompt command, that tells the program to start generating images based on prompts and parameters.
+    
+    prompt = "Imagine an Ice Peashooter"
+    neg_prompt = "out of frame, lowres, text, error, cropped, worst quality, low quality, jpeg artifacts, ugly, duplicate, morbid, mutilated, out of frame, poorly drawn face, mutation, deformed, blurry, bad anatomy, bad proportions, cloned face, disfigured"
+    pipe(
+        prompt=prompt,
+        negative_prompt=neg_prompt,
+        guidance_scale=12.5,
+        num_inference_steps=20,
+        num_images_per_prompt=2,
+        generator=torch.manual_seed(128)
+    ).images[0]
+</h2>
+        <pre><code>
+            // Place your code snippets here
+            // Use <pre><code> for displaying code with proper formatting
+        </code></pre>
+    </section>
+
+    <!-- Add a section for showcasing images -->
+    <section id="images">
+        <h2>Images</h2>
+        <!-- Add your images here -->
+        <!-- Replace 'image-path.jpg' with the actual path to your image -->
+        <img src="rez5.png" alt="Description of the image">
+	<img src="rez2.png" alt="Description of the image">
+	<img src="rez1.png" alt="Description of the image">
+    </section>
+
+    <footer>
+        <!-- Add your footer information -->
+        <p></p>
+    </footer>
+</body>
+</html>
